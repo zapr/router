@@ -1,0 +1,14 @@
+---
+chrony_ntp_servers:
+  - sth1.ntp.netnod.se
+  - sth2.ntp.netnod.se
+  - sth3.ntp.netnod.se
+  - sth4.ntp.netnod.se
+  - gbg1.ntp.netnod.se
+  - gbg2.ntp.netnod.se
+  - lul1.ntp.netnod.se
+  - lul2.ntp.netnod.se
+  - mmo1.ntp.netnod.se
+  - mmo2.ntp.netnod.se
+  - svl1.ntp.netnod.se
+  - svl2.ntp.netnod.se

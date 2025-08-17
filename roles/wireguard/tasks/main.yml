@@ -1,0 +1,110 @@
+---
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+
+- name: Generate WireGuard private and public keys if they do not exist
+  ansible.builtin.shell: |
+    set -o pipefail
+    wg genkey | tee {{ wireguard_dir }}/private.key | wg pubkey > {{ wireguard_dir }}/public.key
+  args:
+    creates: "{{ wireguard_dir }}/public.key"
+    executable: /bin/bash
+
+- name: Generate WireGuard peer private and public keys if they do not exist
+  ansible.builtin.shell: |
+    set -o pipefail
+    wg genkey | tee {{ wireguard_dir }}/peer_private.key | wg pubkey > {{ wireguard_dir }}/peer_public.key
+  args:
+    creates: "{{ wireguard_dir }}/peer_public.key"
+    executable: /bin/bash
+
+- name: Generate WireGuard pre shared key if it does not exist
+  ansible.builtin.shell: |
+    set -o pipefail
+    wg genpsk | tee {{ wireguard_dir }}/psk.key
+  args:
+    creates: "{{ wireguard_dir }}/psk.key"
+    executable: /bin/bash
+
+- name: Read pre shared key into a variable
+  ansible.builtin.slurp:
+    src: "{{ wireguard_dir }}/psk.key"
+  register: psk
+  when: not ansible_check_mode
+
+- name: Read private key into a variable
+  ansible.builtin.slurp:
+    src: "{{ wireguard_dir }}/private.key"
+  register: private_key
+  when: not ansible_check_mode
+
+- name: Read public key into a variable
+  ansible.builtin.slurp:
+    src: "{{ wireguard_dir }}/public.key"
+  register: public_key
+  when: not ansible_check_mode
+
+- name: Read peer private key into a variable
+  ansible.builtin.slurp:
+    src: "{{ wireguard_dir }}/peer_private.key"
+  register: peer_private_key
+  when: not ansible_check_mode
+
+- name: Read peer public key into a variable
+  ansible.builtin.slurp:
+    src: "{{ wireguard_dir }}/peer_public.key"
+  register: peer_public_key
+  when: not ansible_check_mode
+
+- name: Store keys in variables for other tasks
+  ansible.builtin.set_fact:
+    wireguard_private_key: "{{ private_key.content | b64decode | trim }}"
+    wireguard_public_key: "{{ public_key.content | b64decode | trim }}"
+    peer_public_key: "{{ peer_public_key.content | b64decode | trim }}"
+    peer_private_key: "{{ peer_private_key.content | b64decode | trim }}"
+    psk: "{{ psk.content | b64decode | trim }}"
+  when: not ansible_check_mode
+
+- name: Extract scope 256 IPv6 addresses (string-safe)
+  ansible.builtin.set_fact:
+    dns_ipv6: >-
+      {{
+        (
+          (hostvars[inventory_hostname]['ansible_' + internal_interface]['ipv6'] | default([]))
+          | selectattr('scope', '==', '256')
+          | map(attribute='address')
+          | list | first
+        )
+      }}
+
+- name: Set the wireguard peer IPv6 address
+  ansible.builtin.set_fact:
+    wireguard_peer_ipv6: >-
+      {{ dns_ipv6 | regex_replace('00::1$', 'ff::2/128') }}
+
+- name: Render wg0.network
+  ansible.builtin.template:
+    src: templates/wg0.network.j2
+    dest: /etc/systemd/network/wg0.network
+    mode: '0644'
+  notify: Restart systemd-networkd
+
+- name: Render wg0.netdev
+  ansible.builtin.template:
+    src: templates/wg0.netdev.j2
+    dest: /etc/systemd/network/wg0.netdev
+    mode: '0600'
+    owner: systemd-network
+  notify: Restart systemd-networkd
+
+- name: Render client.conf
+  ansible.builtin.template:
+    src: templates/client.conf.j2
+    dest: "{{ wireguard_dir }}/client.conf"
+    mode: '0600'
+
+- name: Force all notified handlers to run at this point, not waiting for normal sync points
+  ansible.builtin.meta: flush_handlers

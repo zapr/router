@@ -1,0 +1,62 @@
+---
+- name: Ensure Pi-hole configuration directory exists
+  ansible.builtin.file:
+    path: /etc/pihole
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure tftpboot directory exists
+  ansible.builtin.file:
+    path: /var/lib/tftpboot
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Download PXE boot files from netboot.xyz
+  ansible.builtin.get_url:
+    url: "{{ item }}"
+    dest: "/var/lib/tftpboot/{{ item | basename }}"
+    mode: '0644'
+  loop: "{{ pxe_downloads }}"
+  vars:
+    pxe_downloads:
+      - https://boot.netboot.xyz/ipxe/netboot.xyz.kpxe
+      - https://boot.netboot.xyz/ipxe/netboot.xyz.efi
+
+- name: Configure Pi-hole installation variables
+  ansible.builtin.template:
+    src: templates/pihole.toml.j2
+    dest: /etc/pihole/pihole.toml
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install git
+  ansible.builtin.apt:
+    name: git
+    update_cache: true
+
+- name: Clone Pi-hole repository
+  ansible.builtin.git:
+    repo: https://github.com/pi-hole/pi-hole.git
+    dest: /etc/pihole/repo
+    version: master
+
+- name: Run Pi-hole installer
+  ansible.builtin.command: bash /etc/pihole/repo/automated\ install/basic-install.sh --unattended
+  args:
+    creates: /etc/systemd/system/pihole-FTL.service
+
+- name: Copy motd to /etc/motd
+  ansible.builtin.copy:
+    src: files/motd
+    dest: /etc/motd
+    mode: '0755'
+
+- name: Remove uname on login
+  ansible.builtin.file:
+    path: /etc/update-motd.d/10-uname
+    state: absent

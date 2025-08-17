@@ -1,0 +1,29 @@
+---
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+
+- name: Configure allow.conf
+  ansible.builtin.copy:
+    dest: /etc/chrony/conf.d/allow.conf
+    content: "allow\n"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure remote NTP servers
+  ansible.builtin.template:
+    src: remote-sources.sources.j2
+    dest: /etc/chrony/sources.d/remote-sources.sources
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Comment out lines starting with "pool" in chrony.conf
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: '^(pool.*)'
+    line: '# \1'
+    backrefs: true

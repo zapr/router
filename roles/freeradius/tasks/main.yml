@@ -1,0 +1,54 @@
+---
+- name: Install freeRADIUS
+  ansible.builtin.apt:
+    name: freeradius
+    state: present
+    update_cache: true
+
+- name: Copy FreeRADIUS files to appropriate directories with permissions
+  ansible.builtin.copy:
+    src: "files/{{ item.filename }}"
+    dest: "/etc/freeradius/3.0/{{ item.subdir }}/{{ item.filename }}"
+    mode: "{{ item.mode }}"
+    owner: freerad
+    group: freerad
+  loop:
+    - { filename: 'server.key', subdir: 'certs', mode: '0600' }
+    - { filename: 'server.pem', subdir: 'certs', mode: '0644' }
+    - { filename: 'default', subdir: 'sites-available', mode: '0644' }
+    - { filename: 'ca.pem', subdir: 'certs', mode: '0644' }
+    - { filename: 'eap', subdir: 'mods-available', mode: '0644' }
+
+- name: Copy FreeRADIUS clients.conf
+  ansible.builtin.copy:
+    src: "files/clients.conf"
+    dest: "/etc/freeradius/3.0/clients.conf"
+    mode: '0600'
+    owner: freerad
+    group: freerad
+
+- name: Find symlinks in mods-enabled
+  ansible.builtin.find:
+    paths: /etc/freeradius/3.0/mods-enabled
+    file_type: link
+  register: found_links
+
+- name: Remove symlinks except eap
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ found_links.files }}"
+  when: item.path | basename != 'eap'
+
+- name: Find symlinks in sites-enabled
+  ansible.builtin.find:
+    paths: /etc/freeradius/3.0/sites-enabled
+    file_type: link
+  register: found_links
+
+- name: Remove symlinks except default
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ found_links.files }}"
+  when: item.path | basename != 'default'

@@ -1,0 +1,18 @@
+[Match]
+Name={{ ifname }}
+
+[Network]
+Address={{ ipv4_address_with_netmask }}
+IPv6SendRA=yes
+DHCPv6PrefixDelegation=yes
+
+[IPv6SendRA]
+DNS=_link_local
+EmitDomains=true
+Domains={{ internal_domain }}
+Managed=true
+OtherInformation=true
+
+[DHCPPrefixDelegation]
+SubnetId=0
+Token=static:::1

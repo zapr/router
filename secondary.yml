@@ -1,0 +1,19 @@
+---
+- name: Router Setup Part II
+  hosts: public
+  roles:
+    - wireguard
+    - pihole
+
+  pre_tasks:
+    - name: Load internal network variables
+      ansible.builtin.include_vars: vars/main.yml
+
+  post_tasks:
+    - name: Replace /etc/resolv.conf
+      ansible.builtin.copy:
+        content: "nameserver ::1\n"
+        dest: /etc/resolv.conf
+        owner: root
+        group: root
+        mode: '0644'

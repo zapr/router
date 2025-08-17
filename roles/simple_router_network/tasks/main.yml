@@ -1,0 +1,86 @@
+---
+- name: Set external interface name
+  ansible.builtin.template:
+    src: templates/link.j2
+    dest: /etc/systemd/network/10-wan.link
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    macaddress: "{{ external_if_macaddress }}"
+    ifname: "{{ external_interface }}"
+
+- name: Set internal interface name
+  ansible.builtin.template:
+    src: templates/link.j2
+    dest: /etc/systemd/network/20-lan.link
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    macaddress: "{{ internal_if_macaddress }}"
+    ifname: "{{ internal_interface }}"
+
+- name: Set external network configuration
+  ansible.builtin.template:
+    src: templates/wan.network.j2
+    dest: /etc/systemd/network/wan.network
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    ifname: "{{ external_interface }}"
+
+- name: Set internal network configuration
+  ansible.builtin.template:
+    src: templates/lan.network.j2
+    dest: /etc/systemd/network/lan.network
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    ifname: "{{ internal_interface }}"
+    ipv4_address_with_netmask: "{{ internal_ip }}/{{ internal_netmask }}"
+
+- name: Disable the default networking.service
+  ansible.builtin.systemd:
+    name: networking.service
+    state: stopped
+    enabled: false
+    masked: true
+
+- name: Enable systemd-networkd.service
+  ansible.builtin.systemd:
+    name: systemd-networkd.service
+    enabled: true
+    masked: false
+
+- name: Set up nftables rules
+  ansible.builtin.template:
+    src: templates/nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable nftables.service
+  ansible.builtin.systemd:
+    name: nftables.service
+    enabled: true
+    masked: false
+
+- name: Add sysctl config
+  ansible.builtin.copy:
+    src: files/forward.conf
+    dest: /etc/sysctl.d/forward.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Replace /etc/resolv.conf
+  ansible.builtin.copy:
+    content: "nameserver 1.0.0.1\n"
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: '0644'

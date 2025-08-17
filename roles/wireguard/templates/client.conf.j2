@@ -1,0 +1,10 @@
+[Interface]
+Address = {{ wireguard_peer_ipv6 }}, {{ wireguard_peer_ipv4 }}
+PrivateKey = {{ peer_private_key }}
+DNS = {{ dns_ipv6 }}
+
+[Peer]
+PublicKey = {{ wireguard_public_key }}
+PresharedKey = {{ psk }}
+Endpoint = public.example.com:51820
+AllowedIPs = ::/0, 0.0.0.0/0

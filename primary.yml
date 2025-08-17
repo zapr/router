@@ -1,0 +1,46 @@
+---
+- name: Router Setup Part I
+  hosts: private
+  roles:
+    - cloudflared
+    - chrony
+    - freeradius
+    - simple_router_network
+
+  pre_tasks:
+    - name: Set list of non-loopback interfaces
+      ansible.builtin.set_fact:
+        ifs: "{{ ansible_facts.interfaces | reject('equalto', 'lo') }}"
+    - name: Set external interface
+      ansible.builtin.set_fact:
+        external_if: "{{ ansible_facts.default_ipv4.interface }}"
+    - name: Set internal interface
+      ansible.builtin.set_fact:
+        internal_if: "{{ ifs | reject('equalto', external_if) | first }}"
+    - name: Set MAC address for external interface
+      ansible.builtin.set_fact:
+        external_if_macaddress: "{{ ansible_facts[external_if].macaddress }}"
+    - name: Set MAC address for internal interface
+      ansible.builtin.set_fact:
+        internal_if_macaddress: "{{ ansible_facts[internal_if].macaddress }}"
+    - name: Load internal network variables
+      ansible.builtin.include_vars: vars/main.yml
+    - name: Set system hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}.{{ internal_domain }}"
+    - name: Update 127.0.1.1 entry in /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s+'
+        line: "127.0.1.1	{{ hostname }}.{{ internal_domain }}	{{ hostname }}"
+        state: present
+
+  post_tasks:
+    - name: Disable apt proxy in apt.conf
+      ansible.builtin.lineinfile:
+        path: /etc/apt/apt.conf
+        regexp: '^(Acquire::http::Proxy.*)'
+        line: '# \1'
+        backrefs: true
+    - name: Poweroff host
+      community.general.shutdown:

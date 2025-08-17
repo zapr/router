@@ -1,0 +1,22 @@
+[Match]
+Name={{ ifname }}
+
+[Network]
+DHCP=yes
+LLMNR=false
+
+[DHCPv4]
+ClientIdentifier=mac
+SendHostname=no
+UseDNS=no
+UseNTP=no
+UseSIP=no
+UseDomains=no
+UseHostname=no
+
+[DHCPv6]
+IAID=0x12345678
+UseDNS=no
+UseNTP=no
+UseDomains=no
+UseHostname=no

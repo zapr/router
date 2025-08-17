@@ -1,0 +1,41 @@
+[dns]
+upstreams = [ "127.0.0.1#5053" ]
+domainNeeded = true
+domain = "{{ internal_domain }}"
+interface = "{{ internal_interface }}"
+listeningMode = "ALL"
+[dhcp]
+active = true
+start = "{{ dhcp_start }}"
+end = "{{ dhcp_end }}"
+router = "{{ internal_ip }}"
+leaseTime = "2d"
+hosts = [
+  "02:03:04:05:06:07,accesspoint,{{ static_host }}7,[::7]",
+  "02:03:04:05:06:08,laptop,{{ static_host }}81,[::81]"
+]
+[ntp.ipv4]
+active = false
+[ntp.ipv6]
+active = false
+[ntp.sync]
+active = false
+[database]
+DBinterval = 7200
+[misc]
+dnsmasq_lines = [
+  "no-dhcp-interface={{ external_interface }}",
+  "dhcp-option=vendor:MSFT,1,2i",
+  "dhcp-option=option6:dns-server,::",
+  "dhcp-range=::1:0000,::1:ffff,constructor:{{ internal_interface }},2d",
+  "enable-tftp",
+  "tftp-root=/var/lib/tftpboot",
+  "dhcp-boot=netboot.xyz.kpxe",
+  "dhcp-match=set:efi32,option:client-arch,6",
+  "dhcp-boot=tag:efi32,netboot.xyz.efi",
+  "dhcp-match=set:efi64,option:client-arch,7",
+  "dhcp-boot=tag:efi64,netboot.xyz.efi",
+  "dhcp-option=option6:bootfile-url,tftp://[{{ dns_ipv6 }}]/netboot.xyz.efi",
+  "dhcp-option=option:ntp-server,0.0.0.0",
+  "dhcp-option=option6:ntp-server,[{{ dns_ipv6 }}]"
+]

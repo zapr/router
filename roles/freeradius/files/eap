@@ -1,0 +1,17 @@
+eap {
+    default_eap_type = tls
+
+    tls-config tls-common {
+        private_key_file = ${confdir}/certs/server.key
+        certificate_file = ${confdir}/certs/server.pem
+        ca_file = ${confdir}/certs/ca.pem
+        verify_client = yes
+        require_client_cert = yes
+        tls_min_version = 1.2
+        tls_max_version = 1.2
+    }
+
+    tls {
+        tls = tls-common
+    }
+}

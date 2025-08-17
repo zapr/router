@@ -1,0 +1,112 @@
+#!/usr/sbin/nft -f
+
+define      ext_iface = {{ external_interface }}
+define      int_iface = {{ internal_interface }}
+define      laptop_v4 = {{ static_host }}81
+define      laptop_v6 = ::81
+define         v6mask = ::00ff:ffff:ffff:ffff:ffff
+define       int_ipv4 = {{ internal_network }}
+define wireguard_ipv4 = {{ wireguard_network }}
+
+flush ruleset
+
+table inet filter {
+
+ map ipv4_port_forwards {
+  type ipv4_addr . inet_proto . inet_service : ipv4_addr . inet_service
+  flags interval
+  counter
+  elements = {
+          0.0.0.0/0 . tcp . 25565 : $laptop_v4 . 25565 }
+ }
+
+ set ipv6_port_forwards {
+  type ipv6_addr . inet_proto . inet_service . ipv6_addr;
+  flags interval
+  counter
+  elements = {
+          ::/0 . tcp . 25565 . $laptop_v6 }
+ }
+
+ chain very_early_packet_filter {
+  type filter hook prerouting priority -300; policy accept;
+  iifname "lo" notrack
+ }
+
+ chain early_packet_filter {
+  # Priority -150 is before pre routing in nat table and after connection tracking (-200)
+  type filter hook prerouting priority -150; policy accept;
+
+  # Drop badly formed packets
+  ct state invalid counter drop
+  tcp flags & (fin | syn | rst | psh | ack | urg) == { 0x0, fin | syn, fin | rst, fin | ack | urg, fin | syn | rst | psh | ack | urg, syn | rst } counter all drop
+  tcp flags & (fin | syn | rst | ack) != syn ct state new counter drop
+  tcp flags ! fin,syn,rst,psh,ack,urg counter drop
+  tcp flags syn tcp option maxseg size 1-536 counter drop
+ }
+
+ chain prerouting {
+  type nat hook prerouting priority -100; policy accept;
+
+  # Redirect all DNS queries to localhost (pi-hole)
+  iifname $int_iface ct state new fib daddr type != local meta l4proto { tcp, udp } th dport 53 counter redirect to :53 comment "Redirect all DNS queries to localhost (pi-hole)"
+
+  # Port forwards
+  iifname $ext_iface ct state new fib daddr type local counter dnat ip to ip saddr . ip protocol . th dport map @ipv4_port_forwards
+ }
+
+ chain input {
+  type filter hook input priority 0; policy drop;
+
+  # Allow already established and related connections
+  ct state established,related counter accept
+
+  # Allow loopback and LAN traffic to this machine
+  iifname { lo, $int_iface, "wg0" } counter accept
+
+  # Allow echo-request on v4 and all icmp on v6
+  icmp type { echo-request } counter accept
+  ip6 nexthdr ipv6-icmp counter accept comment "Allow ALL icmpv6 to router on both WAN and LAN"
+
+  # Allow for router (this machine) DHCPv6 client to work
+  iifname $ext_iface ip6 udp sport 547 udp dport 546 counter accept
+
+  # Allow Wireguard
+  iifname $ext_iface ct state new udp dport 51820 counter accept
+
+  # Allow ssh from everywhere
+  ct state new tcp dport 22 counter accept
+
+  # Count dropped
+  counter
+ }
+
+ chain forward {
+  type filter hook forward priority 0; policy drop;
+
+  # Allow already established and related connections
+  ct state established,related counter accept
+
+  # If originating from LAN, allow out
+  iifname { $int_iface, "wg0" } ct state new counter accept
+
+  # Allow dnat:ed stuff
+  ct status dnat counter accept
+
+  # Allow IPv6 echo-request to LAN
+  icmpv6 type { echo-request } ct state new fib daddr type local counter accept
+
+  # Unfiltered IPv6 ports
+  iifname $ext_iface ct state new ip6 saddr . meta l4proto . th dport . ip6 daddr & $v6mask @ipv6_port_forwards counter accept
+
+  # Count dropped
+  counter
+ }
+
+ chain postrouting {
+  type nat hook postrouting priority 100; policy accept;
+  iifname { $int_iface, "wg0" } ip saddr { $int_ipv4, $wireguard_ipv4 } oifname $ext_iface counter masquerade
+  counter
+ }
+}
+
